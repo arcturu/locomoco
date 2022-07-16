@@ -81,12 +81,37 @@ public:
             nullptr,
             IID_PPV_ARGS(&m_pCommandList)));
 
+        m_isSwapChainInitialized = true;
         return true;
     }
 
-    // TODO
-    void FinalizeSwapChain() {
-        assert(false);
+    bool ResizeSwapChain(int width, int height) {
+        if (!m_isSwapChainInitialized) {
+            return true;
+        }
+        WaitForCommandCompletion();
+        m_pCommandList.Release();
+        for (int i = 0; i < SwapChainCount; i++) {
+            m_FrameObjects[i].pSwapChainBuffer.Release();
+            m_FrameObjects[i].pCommandAllocator->Reset();
+        }
+        m_pSwapChain->ResizeBuffers(SwapChainCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+        for (int i = 0; i < SwapChainCount; i++) {
+            SUCCESS_OR_RETURN_FALSE(m_pDevice->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_FrameObjects[i].pCommandAllocator)));
+            SUCCESS_OR_RETURN_FALSE(m_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&m_FrameObjects[i].pSwapChainBuffer)));
+            m_FrameObjects[i].hRenderTargetView
+                = CreateRenderTargetView(m_FrameObjects[i].pSwapChainBuffer, m_pRtvDescHeap, i);
+        }
+        SUCCESS_OR_RETURN_FALSE(m_pDevice->CreateCommandList(
+            0,
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            m_FrameObjects[0].pCommandAllocator,
+            nullptr,
+            IID_PPV_ARGS(&m_pCommandList)));
+        m_swapChainWidth = width;
+        m_swapChainHeight = height;
+        return true;
     }
 
     void InitializeImGui(HWND hWnd) {
@@ -145,7 +170,6 @@ public:
             m_FrameObjects[swapChainIndex].pSwapChainBuffer,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT);
-
         // サブミット
         SubmitCommandList();
         m_pSwapChain->Present(0, 0);
@@ -164,16 +188,13 @@ public:
 
     void Finalize()
     {
-        // 現在実行されているコマンドの終了を待つ
-        m_FenceValue++;
-        m_pQueue->Signal(m_pFence, m_FenceValue);
-        m_pFence->SetEventOnCompletion(m_FenceValue, m_pFenceEvent);
-        WaitForSingleObject(m_pFenceEvent, INFINITE);
-
+        WaitForCommandCompletion();
         ImGui_ImplDX12_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
     }
+
+    bool IsInitialized() const { return m_isSwapChainInitialized; }
 private:
     static const size_t SwapChainCount = 2;
 
@@ -186,6 +207,7 @@ private:
     };
     FrameObject m_FrameObjects[SwapChainCount]{};
 
+    bool m_isSwapChainInitialized{};
     int m_swapChainWidth{};
     int m_swapChainHeight{};
     IDXGIFactory4Ptr m_pFactory{};
@@ -339,6 +361,14 @@ private:
         m_pQueue->ExecuteCommandLists(1, &pCommandListInterface);
         m_FenceValue++;
         m_pQueue->Signal(m_pFence, m_FenceValue);
+    }
+
+    void WaitForCommandCompletion()
+    {
+        m_FenceValue++;
+        m_pQueue->Signal(m_pFence, m_FenceValue);
+        m_pFence->SetEventOnCompletion(m_FenceValue, m_pFenceEvent);
+        WaitForSingleObject(m_pFenceEvent, INFINITE);
     }
 };
 

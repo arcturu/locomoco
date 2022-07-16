@@ -1,9 +1,11 @@
 #include <windows.h>
 #include "utility.h"
-#include "renderer.h"
+#include "app.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+namespace {
+lm::App app{};
 HCURSOR g_hCursor{};
 
 LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -34,6 +36,9 @@ LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
         int width = lParam & 0xFFFF;
         int height = (lParam >> 16) & 0xFFFF;
         DEBUG_PRINT(L"(%d, %d)\n", width, height);
+        app.PushMessage(new lm::ResizeWindowMessage(width, height));
+        app.Update();
+        app.Draw();
         break;
     }
     case WM_DPICHANGED:
@@ -43,19 +48,25 @@ LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
         int ydpi = (wParam >> 16) & 0xFFFF;
         DEBUG_PRINT(L"dpi: %d\n", xdpi);
         RECT* const prcNewWindow = (RECT*)lParam;
+        int width = prcNewWindow->right - prcNewWindow->left;
+        int height = prcNewWindow->bottom - prcNewWindow->top;
         SetWindowPos(hWnd,
             NULL,
             prcNewWindow->left,
             prcNewWindow->top,
-            prcNewWindow->right - prcNewWindow->left,
-            prcNewWindow->bottom - prcNewWindow->top,
+            width,
+            height,
             SWP_NOZORDER | SWP_NOACTIVATE);
+        app.PushMessage(new lm::ResizeWindowMessage(width, height));
+        app.Update();
+        app.Draw();
         break;
     }
     default:
         break;
     }
     return DefWindowProc(hWnd, msg, wParam, lParam);
+}
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -93,17 +104,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         nullptr);
     ShowWindow(hWnd, SW_SHOWNORMAL);
 
-    lm::Renderer renderer{};
-    if (!renderer.InitializeDirectX()) {
-        MessageBox(nullptr, L"InitializeDirectX failed.", L"Error", MB_OK);
+    lm::AppInitializeParams params{};
+    params.hWnd = hWnd;
+    params.width = contentWidth;
+    params.height = contentHeight;
+    if (!app.Inititialize(params)) {
+        MessageBox(nullptr, L"App initialization failed.", L"Error", MB_OK);
         return -1;
     }
-    if (!renderer.InitializeSwapChain(hWnd, contentWidth, contentHeight)) {
-        MessageBox(nullptr, L"InitializeSwapChain failed.", L"Error", MB_OK);
-        return -1;
-    }
-    renderer.InitializeImGui(hWnd);
 
+    // Windows event loop
     while (true) {
         MSG msg{};
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -115,12 +125,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         else
         {
-            renderer.BeginFrame();
-            ImGui::ShowDemoWindow();
-            renderer.EndFrame();
+            app.Update();
+            app.Draw();
         }
     }
+    app.Finalize();
 
-    renderer.Finalize();
     return 0;
 }
