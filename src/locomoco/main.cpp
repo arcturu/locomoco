@@ -8,8 +8,7 @@ namespace {
 lm::App app{};
 HCURSOR g_hCursor{};
 
-LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
+LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) {
         return 1;
     }
@@ -37,8 +36,6 @@ LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
         int height = (lParam >> 16) & 0xFFFF;
         DEBUG_PRINT(L"(%d, %d)\n", width, height);
         app.PushMessage(new lm::ResizeWindowMessage(width, height));
-        app.Update();
-        app.Draw();
         break;
     }
     case WM_DPICHANGED:
@@ -58,8 +55,6 @@ LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
             height,
             SWP_NOZORDER | SWP_NOACTIVATE);
         app.PushMessage(new lm::ResizeWindowMessage(width, height));
-        app.Update();
-        app.Draw();
         break;
     }
     default:
@@ -69,8 +64,7 @@ LRESULT CALLBACK WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 }
 }
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
-{
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
     // Load default cursor
     g_hCursor = LoadCursor(nullptr, IDC_ARROW);
     WNDCLASSEX windowClass{};
@@ -104,20 +98,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         nullptr);
     ShowWindow(hWnd, SW_SHOWNORMAL);
 
-    lm::AppInitializeParams params{};
-    params.hWnd = hWnd;
-    params.width = contentWidth;
-    params.height = contentHeight;
-    if (!app.Inititialize(params)) {
-        MessageBox(nullptr, L"App initialization failed.", L"Error", MB_OK);
-        return -1;
-    }
+    // App main loop
+    bool isTerminated = false;
+    std::thread appMain([&] {
+        lm::AppInitializeParams params{};
+        params.hWnd = hWnd;
+        params.width = contentWidth;
+        params.height = contentHeight;
+        if (!app.Inititialize(params)) {
+            MessageBox(nullptr, L"App initialization failed.", L"Error", MB_OK);
+            return;
+        }
+        while (!isTerminated){
+            app.Update();
+            app.Draw();
+        }
+        app.Finalize();
+    });
 
     // Windows event loop
     while (true) {
         MSG msg{};
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
+                isTerminated = true;
                 break;
             }
             TranslateMessage(&msg);
@@ -125,11 +129,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         else
         {
-            app.Update();
-            app.Draw();
+            Sleep(1);
         }
     }
-    app.Finalize();
+
+    appMain.join();
 
     return 0;
 }

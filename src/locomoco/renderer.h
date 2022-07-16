@@ -172,15 +172,16 @@ public:
             D3D12_RESOURCE_STATE_PRESENT);
         // サブミット
         SubmitCommandList();
-        m_pSwapChain->Present(0, 0);
-
-        // 次フレームのコマンドリストを用意する
-        UINT nextSwapChainIndex = m_pSwapChain->GetCurrentBackBufferIndex();
         // このフレームのコマンドリストの実行が終わるのを待つ（ダブルバッファリングしていない TLAS
         // を動的に書き換えているので）
         // TODO: TLAS をダブルバッファリング？
         m_pFence->SetEventOnCompletion(m_FenceValue, m_pFenceEvent);
         WaitForSingleObject(m_pFenceEvent, INFINITE);
+        DXGI_PRESENT_PARAMETERS params{};
+        m_pSwapChain->Present1(0, 0, &params); // SyncInterval == 1 => wait for vsync
+
+        // 次フレームのコマンドリストを用意する
+        UINT nextSwapChainIndex = m_pSwapChain->GetCurrentBackBufferIndex();
 
         m_FrameObjects[nextSwapChainIndex].pCommandAllocator->Reset();
         m_pCommandList->Reset(m_FrameObjects[nextSwapChainIndex].pCommandAllocator, nullptr);
@@ -307,7 +308,7 @@ private:
         desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         desc.SwapEffect
-            = DXGI_SWAP_EFFECT_FLIP_DISCARD; // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/ne-dxgi-dxgi_swap_effect
+            = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/ne-dxgi-dxgi_swap_effect
         desc.SampleDesc.Count = 1;
 
         // CreateSwapChainForHwnd は SwapChain1 しか受け取れないので、まず SwapChain1 を作ってから
