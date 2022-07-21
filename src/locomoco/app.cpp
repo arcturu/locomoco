@@ -11,6 +11,7 @@ bool App::Inititialize(const AppInitializeParams& params) {
         return false;
     }
     m_renderer.InitializeImGui(params.hWnd);
+    ImGui::GetIO().ConfigInputTrickleEventQueue = false;
     return true;
 }
 
@@ -31,7 +32,11 @@ void App::Draw() {
         m_renderer.ResizeSwapChain(m_state.windowWidth, m_state.windowHeight);
     }
     m_renderer.BeginFrame();
+
+
+
     ImGui::ShowDemoWindow();
+    
     m_renderer.EndFrame();
 }
 }

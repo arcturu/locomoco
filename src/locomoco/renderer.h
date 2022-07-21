@@ -178,7 +178,7 @@ public:
         m_pFence->SetEventOnCompletion(m_FenceValue, m_pFenceEvent);
         WaitForSingleObject(m_pFenceEvent, INFINITE);
         DXGI_PRESENT_PARAMETERS params{};
-        m_pSwapChain->Present1(0, 0, &params); // SyncInterval == 1 => wait for vsync
+        m_pSwapChain->Present1(1, 0, &params); // SyncInterval == 1 => wait for vsync
 
         // 次フレームのコマンドリストを用意する
         UINT nextSwapChainIndex = m_pSwapChain->GetCurrentBackBufferIndex();
@@ -195,7 +195,28 @@ public:
         ImGui::DestroyContext();
     }
 
+
+    D3D12_CPU_DESCRIPTOR_HANDLE CreateRenderTargetView(
+        ID3D12ResourcePtr pResource, ID3D12DescriptorHeapPtr pDescriptorHeap, UINT index)
+    {
+        assert(m_pDevice != nullptr);
+
+        D3D12_RENDER_TARGET_VIEW_DESC desc{};
+        desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        desc.Texture2D.MipSlice = 0;
+
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        handle.ptr += index * m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        m_pDevice->CreateRenderTargetView(pResource, &desc, handle);
+        return handle;
+    }
+
+    // Getters
+
     bool IsInitialized() const { return m_isSwapChainInitialized; }
+    ID3D12Device5Ptr GetDevice() { return m_pDevice; }
+    ID3D12GraphicsCommandList4Ptr GetCommandList() { return m_pCommandList; }
 private:
     static const size_t SwapChainCount = 2;
 
@@ -319,22 +340,6 @@ private:
         SUCCESS_OR_RETURN_NULL(pFactory->CreateSwapChainForHwnd(m_pQueue, hWnd, &desc, nullptr, nullptr, &pSwapChain1));
         SUCCESS_OR_RETURN_NULL(pSwapChain1->QueryInterface(IID_PPV_ARGS(&pSwapChain3)));
         return pSwapChain3;
-    }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE CreateRenderTargetView(
-        ID3D12ResourcePtr pResource, ID3D12DescriptorHeapPtr pDescriptorHeap, UINT index)
-    {
-        assert(m_pDevice != nullptr);
-
-        D3D12_RENDER_TARGET_VIEW_DESC desc{};
-        desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        desc.Texture2D.MipSlice = 0;
-
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        handle.ptr += index * m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        m_pDevice->CreateRenderTargetView(pResource, &desc, handle);
-        return handle;
     }
 
     void ResourceBarrier(
